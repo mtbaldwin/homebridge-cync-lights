@@ -31,7 +31,7 @@ export interface CyncDevice {
 interface CyncAuthResponse {
 
   readonly access_token: string;
-  readonly expires_in: number;
+  readonly expire_in: number;
 
 }
 
@@ -46,7 +46,7 @@ interface CyncLoginResponse {
 export class CyncApi {
 
   private accessToken = '';
-  private accessTokenExpires = 0;
+  private accessTokenExpiration: Date = new Date(0);
   private readonly refreshToken : string;
   public readonly userID : number;
   public readonly authorize : string;
@@ -85,7 +85,9 @@ export class CyncApi {
       throw new Error('Please go to the plugin settings and log into Cync.');
     }
 
-    if (this.accessTokenExpires < Date.now()) {
+    this.platform.log.info(`Checking access token expiration ${this.accessTokenExpiration}`);
+
+    if (isNaN(this.accessTokenExpiration.valueOf()) || this.accessTokenExpiration.valueOf() < Date.now()) {
       // first, check the access_token
       this.platform.log.info('Updating access token...');
 
@@ -98,16 +100,19 @@ export class CyncApi {
       });
 
       const data = await token.json() as CyncAuthResponse;
+      this.platform.log.info(`Response: ${JSON.stringify(data)}`);
       if (!data.access_token) {
-        this.platform.log.info(`Cync login response: ${JSON.stringify(data)}`);
         throw new Error('Unable to authenticate with Cync servers.  Please verify you have a valid refresh token.');
       }
 
       this.accessToken = data.access_token;
+
       // We will refresh it one day before it expires
-      this.accessTokenExpires = Date.now() + data.expires_in - 86400;
+      this.accessTokenExpiration = new Date(Date.now() + data.expire_in - 86400);
+      this.platform.log.info(`New access token expires in ${data.expire_in} seconds.`);
+      this.platform.log.info(`Expiration date set to ${this.accessTokenExpiration}.`);
     } else {
-      this.platform.log.info(`Access token valid until ${new Date(this.accessTokenExpires)}`);
+      this.platform.log.info(`Access token valid until ${this.accessTokenExpiration}`);
     }
 
     return this.accessToken;
